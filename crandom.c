@@ -5,7 +5,7 @@
 
 PyObject* randommodule;
 PyObject* random_function;
-
+PyObject* dummy;
 
 long get_python_random_int(size_t below){
   /* Use Python.random to generate random int. 
@@ -31,7 +31,7 @@ long get_random_int(size_t below){
 
 
 static PyObject* choice_dict(PyObject* self,PyObject* args){
-  /* Return a uniformly random element from a Python dict in linear time. 
+  /* Return a uniformly random element from a Python dict in constant time. 
    */
   const PyDictObject *dict;
   if (!PyArg_ParseTuple(args, "O!", &PyDict_Type ,&dict))
@@ -51,7 +51,7 @@ static PyObject* choice_dict(PyObject* self,PyObject* args){
   }
 
   PyObject* key=NULL;
-  while (key==NULL){   
+  while (key==NULL || key==dummy){   
     key=dict->ma_table[get_random_int(table_size)].me_key;
   }
   
@@ -59,6 +59,7 @@ static PyObject* choice_dict(PyObject* self,PyObject* args){
   Py_INCREF(key);
   return key;
 }
+
 
 static char choice_dict_docs[] =
     "Returns a uniformly random key from a dict object.\n";
@@ -68,6 +69,34 @@ static PyMethodDef crandom_funcs[] = {
      METH_VARARGS, choice_dict_docs},
     {NULL}
 };
+
+
+PyObject* get_dummy(void){
+  /* Extract the dummy value for the dictionaries.
+   */
+
+  PyObject * dict  = PyDict_New(); // passing ownership to us
+  PyObject * keyval = PyString_FromString("dummy"); // passing ownership to us
+  PyDict_SetItem(dict,keyval,keyval); // We retain the ownerships
+  PyDict_DelItem(dict,keyval); // We retain the ownerships 
+  //There is now a dummy element in the dict
+
+  PyObject* key;
+  PyObject* dummy=NULL;
+  size_t i;
+  for(i=0;i<=((PyDictObject *) dict)->ma_mask;i++){
+    key=((PyDictObject *) dict)->ma_table[i].me_key;
+    if (key!=NULL){
+      dummy=key;
+    }
+  }
+
+  // We created two objects, decreasing their refcount
+  Py_DECREF(dict);
+  Py_DECREF(keyval);
+
+  return dummy;
+}
 
 void init_crandom(void)
 {
@@ -82,6 +111,9 @@ void init_crandom(void)
   //debug
   //printf(PyString_AsString(PyObject_Str(random_function)));
   //printf("\n");
+
+  dummy = get_dummy();
+  
 
   Py_InitModule3("_crandom", crandom_funcs,
 		 "Functions for randomly sampling dictionaries.");
